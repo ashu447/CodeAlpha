@@ -1,0 +1,199 @@
+# Complete Data Science Pipeline - E-commerce Product Analysis
+# Tasks: Web Scraping, EDA, Data Visualization, Sentiment Analysis
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime, timedelta
+import requests
+from bs4 import BeautifulSoup
+import re
+import warnings
+warnings.filterwarnings('ignore')
+
+# For sentiment analysis
+from textblob import TextBlob
+import nltk
+from collections import Counter
+from wordcloud import WordCloud
+
+# Download required NLTK data (run once)
+try:
+    nltk.download('punkt', quiet=True)
+    nltk.download('stopwords', quiet=True)
+    nltk.download('vader_lexicon', quiet=True)
+except:
+    pass
+
+print("🚀 COMPLETE DATA SCIENCE PIPELINE - E-COMMERCE ANALYSIS")
+print("=" * 60)
+
+# ============================================================================
+# TASK 1: WEB SCRAPING
+# ============================================================================
+
+class EcommerceScraper:
+    """
+    Web scraper for e-commerce product data
+    Includes methods for different sites and data extraction
+    """
+
+    def __init__(self):
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        self.session = requests.Session()
+        self.session.headers.update(self.headers)
+
+    def scrape_product_data(self, url, product_selector, price_selector, rating_selector):
+        """
+        Generic scraping method for product data
+        """
+        try:
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+
+            products = []
+            product_elements = soup.select(product_selector)
+
+            for element in product_elements[:20]:  # Limit to 20 products
+                try:
+                    name = element.select_one(product_selector).text.strip()
+                    price = element.select_one(price_selector).text.strip()
+                    rating = element.select_one(rating_selector).text.strip()
+
+                    # Clean price data
+                    price_clean = re.sub(r'[^\d.]', '', price)
+                    rating_clean = re.sub(r'[^\d.]', '', rating)
+
+                    products.append({
+                        'product_name': name,
+                        'price': float(price_clean) if price_clean else None,
+                        'rating': float(rating_clean) if rating_clean else None,
+                        'scraped_date': datetime.now().strftime('%Y-%m-%d')
+                    })
+                except Exception as e:
+                    continue
+
+            return products
+        except Exception as e:
+            print(f"❌ Scraping failed: {e}")
+            return []
+
+    def create_sample_dataset(self):
+        """
+        Create sample e-commerce dataset when scraping is restricted
+        """
+        print("📊 Creating sample e-commerce dataset...")
+
+        # Sample product data
+        categories = ['Electronics', 'Clothing', 'Books', 'Home & Garden', 'Sports']
+        brands = ['Samsung', 'Apple', 'Nike', 'Adidas', 'Sony', 'LG', 'HP', 'Dell']
+
+        np.random.seed(42)
+        n_products = 500
+
+        data = []
+        for i in range(n_products):
+            product_data = {
+                'product_id': f'PROD_{i+1:04d}',
+                'product_name': f"{np.random.choice(brands)} {np.random.choice(['Pro', 'Max', 'Ultra', 'Plus', 'Standard'])} {np.random.randint(1, 10)}",
+                'category': np.random.choice(categories),
+                'brand': np.random.choice(brands),
+                'price': np.random.uniform(10, 2000),
+                'rating': np.random.uniform(1, 5),
+                'num_reviews': np.random.randint(0, 1000),
+                'discount_percent': np.random.uniform(0, 50),
+                'availability': np.random.choice(['In Stock', 'Out of Stock'], p=[0.8, 0.2]),
+                'scraped_date': datetime.now() - timedelta(days=np.random.randint(0, 30))
+            }
+            data.append(product_data)
+
+        df = pd.DataFrame(data)
+        df['discounted_price'] = df['price'] * (1 - df['discount_percent']/100)
+
+        print(f"✅ Created dataset with {len(df)} products")
+        return df
+
+# Initialize scraper and create dataset
+scraper = EcommerceScraper()
+df_products = scraper.create_sample_dataset()
+
+print(f"\n📈 Dataset Overview:")
+print(f"Shape: {df_products.shape}")
+print(f"Columns: {list(df_products.columns)}")
+print(f"\nFirst few rows:")
+print(df_products.head())
+
+===================================================
+# TASK 3 GRAPHICAL REPRESENTATIONS
+===================================================
+
+# TOP 10 MOST FREQUENT PRODUCT CATEGORIES
+plt.figure(figsize=(10, 6))
+sns.countplot(data=df_products, x='category', order=df_products['category'].value_counts().index, palette='viridis')
+plt.title("Top Product Categories")
+plt.xlabel("Category")
+plt.ylabel("Number of Products")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+
+# DISTRIBUTION OF PRODUCT PRICE
+plt.figure(figsize=(10, 6))
+sns.histplot(df_products['price'], bins=30, kde=True, color='teal')
+plt.title("Price Distribution of Products")
+plt.xlabel("Price ($)")
+plt.ylabel("Count")
+plt.show()
+
+# AVERAGE PRODUCT BY CATEGORY
+plt.figure(figsize=(10, 6))
+avg_price = df_products.groupby('category')['price'].mean().sort_values()
+sns.barplot(x=avg_price.values, y=avg_price.index, palette='coolwarm')
+plt.title("Average Product Price by Category")
+plt.xlabel("Average Price ($)")
+plt.ylabel("Category")
+plt.show()
+
+# CATEGORY-WISE AVERAGE PRICE
+plt.figure(figsize=(10, 6))
+sns.barplot(data=df_products, x='category', y='price', estimator=np.mean, palette='viridis')
+plt.title('Average Price by Product Category')
+plt.ylabel('Average Price ($)')
+plt.xticks(rotation=45)
+plt.grid(axis='y')
+plt.show()
+
+# DISCOUNT VS RATING SCATTER PLOT
+plt.figure(figsize=(10, 6))
+sns.scatterplot(data=df_products, x='discount_percent', y='rating', hue='category', alpha=0.7)
+plt.title('Discount vs. Rating by Category')
+plt.xlabel('Discount (%)')
+plt.ylabel('Rating')
+plt.legend(title='Category', bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+plt.show()
+
+# PRODUCT AVAILABILITY COUNT
+plt.figure(figsize=(6, 4))
+sns.countplot(data=df_products, x='availability', palette='Set2')
+plt.title('Product Availability')
+plt.ylabel('Count')
+plt.grid(axis='y')
+plt.show()
+
+
+# CORRELATION HEATMAP
+plt.figure(figsize=(8, 6))
+corr_matrix = df_products[['price', 'discount_percent', 'rating', 'num_reviews', 'discounted_price']].corr()
+sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f', square=True)
+plt.title('Correlation Matrix')
+plt.show()
+
+
+
+

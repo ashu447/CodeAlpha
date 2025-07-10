@@ -1,0 +1,244 @@
+
+# TASK 2: EXPLORATORY DATA ANALYSIS (EDA)
+# ============================================================================
+
+print("\n" + "="*60)
+print("📊 TASK 2: EXPLORATORY DATA ANALYSIS")
+print("="*60)
+
+import pandas as pd
+import numpy as np
+from scipy import stats
+
+# Placeholder for loading data - replace with your actual data loading code
+# For example, if your data is in a CSV file:
+try:
+    df_products = pd.read_csv('/path/to/your/dataframe.csv')
+except FileNotFoundError:
+    print("Error: Data file not found. Please replace '/path/to/your/dataframe.csv' with the correct path to your data.")
+    # Create an empty DataFrame or exit if data loading is essential
+    df_products = pd.DataFrame()
+    # Alternatively, you might want to raise the exception or exit
+    # raise
+    # exit()
+
+
+class EDAAnalyzer:
+    """
+    Comprehensive EDA analyzer for e-commerce data
+    """
+
+    def __init__(self, df):
+        self.df = df
+        # Ensure columns exist before selecting dtypes
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        self.numeric_cols = [col for col in numeric_cols if col in df.columns]
+        categorical_cols = df.select_dtypes(include=['object']).columns
+        self.categorical_cols = [col for col in categorical_cols if col in df.columns]
+
+
+    def basic_info(self):
+        """Basic dataset information"""
+        print("📋 BASIC DATASET INFORMATION")
+        print("-" * 40)
+        if self.df.empty:
+            print("DataFrame is empty. Cannot perform basic info.")
+            return None
+
+        print(f"Dataset Shape: {self.df.shape}")
+        print(f"Memory Usage: {self.df.memory_usage(deep=True).sum() / 1024**2:.2f} MB")
+        print(f"\nData Types:")
+        print(self.df.dtypes)
+        print(f"\nMissing Values:")
+        print(self.df.isnull().sum())
+
+        return self.df.describe()
+
+    def ask_meaningful_questions(self):
+        """Ask and answer meaningful questions about the dataset"""
+        print("\n🤔 MEANINGFUL QUESTIONS & INSIGHTS")
+        print("-" * 40)
+
+        if self.df.empty:
+            print("DataFrame is empty. Cannot ask meaningful questions.")
+            return []
+
+        questions_insights = []
+
+        # Question 1: Price distribution by category
+        if 'category' in self.df.columns and 'price' in self.df.columns:
+            q1 = "What's the price distribution across different categories?"
+            try:
+                price_by_category = self.df.groupby('category')['price'].agg(['mean', 'median', 'std']).round(2)
+                questions_insights.append((q1, price_by_category))
+            except Exception as e:
+                print(f"Could not answer Q1: {e}")
+
+
+        # Question 2: Rating patterns
+        if all(col in self.df.columns for col in ['rating', 'price', 'num_reviews']):
+            q2 = "How do ratings correlate with price and reviews?"
+            try:
+                rating_corr = self.df[['rating', 'price', 'num_reviews']].corr()
+                questions_insights.append((q2, rating_corr))
+            except Exception as e:
+                 print(f"Could not answer Q2: {e}")
+
+        # Question 3: Brand performance
+        if all(col in self.df.columns for col in ['brand', 'rating', 'price', 'num_reviews']):
+            q3 = "Which brands have the highest average ratings?"
+            try:
+                brand_performance = self.df.groupby('brand').agg({
+                    'rating': 'mean',
+                    'price': 'mean',
+                    'num_reviews': 'mean'
+                }).round(2).sort_values('rating', ascending=False)
+                questions_insights.append((q3, brand_performance))
+            except Exception as e:
+                print(f"Could not answer Q3: {e}")
+
+        # Question 4: Stock availability patterns
+        if 'category' in self.df.columns and 'availability' in self.df.columns:
+            q4 = "What's the stock availability across categories?"
+            try:
+                stock_analysis = pd.crosstab(self.df['category'], self.df['availability'], normalize='index') * 100
+                questions_insights.append((q4, stock_analysis))
+            except Exception as e:
+                 print(f"Could not answer Q4: {e}")
+
+        # Question 5: Discount patterns
+        if all(col in self.df.columns for col in ['category', 'discount_percent', 'rating']):
+            q5 = "How do discounts vary by category and affect ratings?"
+            try:
+                discount_analysis = self.df.groupby('category').agg({
+                    'discount_percent': 'mean',
+                    'rating': 'mean'
+                }).round(2)
+                questions_insights.append((q5, discount_analysis))
+            except Exception as e:
+                print(f"Could not answer Q5: {e}")
+
+
+        for question, insight in questions_insights:
+            print(f"\n❓ {question}")
+            print(insight)
+
+        return questions_insights
+
+    def identify_patterns_anomalies(self):
+        """Identify trends, patterns, and anomalies"""
+        print("\n🔍 PATTERNS & ANOMALIES")
+        print("-" * 40)
+
+        if self.df.empty:
+            print("DataFrame is empty. Cannot identify patterns and anomalies.")
+            return {}
+
+        patterns = {}
+
+        # High-priced products with low ratings
+        if all(col in self.df.columns for col in ['price', 'rating']):
+            try:
+                high_price_low_rating = self.df[
+                    (self.df['price'] > self.df['price'].quantile(0.8)) &
+                    (self.df['rating'] < 3)
+                ]
+                patterns['expensive_low_rated'] = len(high_price_low_rating)
+            except Exception as e:
+                print(f"Could not identify expensive_low_rated pattern: {e}")
+
+        # Products with extreme discounts
+        if 'discount_percent' in self.df.columns:
+            try:
+                extreme_discounts = self.df[self.df['discount_percent'] > 40]
+                patterns['extreme_discounts'] = len(extreme_discounts)
+            except Exception as e:
+                print(f"Could not identify extreme_discounts pattern: {e}")
+
+        # Highly reviewed products
+        if 'num_reviews' in self.df.columns:
+            try:
+                highly_reviewed = self.df[self.df['num_reviews'] > self.df['num_reviews'].quantile(0.95)]
+                patterns['highly_reviewed'] = len(highly_reviewed)
+            except Exception as e:
+                print(f"Could not identify highly_reviewed pattern: {e}")
+
+        # Price outliers
+        if 'price' in self.df.columns:
+            try:
+                Q1 = self.df['price'].quantile(0.25)
+                Q3 = self.df['price'].quantile(0.75)
+                IQR = Q3 - Q1
+                price_outliers = self.df[
+                    (self.df['price'] < Q1 - 1.5 * IQR) |
+                    (self.df['price'] > Q3 + 1.5 * IQR)
+                ]
+                patterns['price_outliers'] = len(price_outliers)
+            except Exception as e:
+                print(f"Could not identify price_outliers pattern: {e}")
+
+
+        print("📊 Pattern Analysis:")
+        for pattern, count in patterns.items():
+            print(f"  • {pattern.replace('_', ' ').title()}: {count} products")
+
+        return patterns
+
+    def validate_assumptions(self):
+        """Test hypotheses and validate assumptions"""
+        print("\n🧪 HYPOTHESIS TESTING")
+        print("-" * 40)
+
+        if self.df.empty:
+            print("DataFrame is empty. Cannot validate assumptions.")
+            return {}
+
+        results = {}
+        # Hypothesis 1: Higher-priced products have better ratings
+        if all(col in self.df.columns for col in ['price', 'rating']):
+            try:
+                expensive_products = self.df[self.df['price'] > self.df['price'].median()]['rating'].dropna()
+                cheap_products = self.df[self.df['price'] <= self.df['price'].median()]['rating'].dropna()
+
+                if not expensive_products.empty and not cheap_products.empty:
+                    t_stat, p_value = stats.ttest_ind(expensive_products, cheap_products)
+                    print(f"H1: Expensive products have better ratings")
+                    print(f"   T-statistic: {t_stat:.4f}, P-value: {p_value:.4f}")
+                    print(f"   Result: {'Significant' if p_value < 0.05 else 'Not significant'}")
+                    results['h1_pvalue'] = p_value
+                else:
+                    print("H1: Not enough data in both groups to perform t-test.")
+            except Exception as e:
+                print(f"Could not test H1: {e}")
+
+
+        # Hypothesis 2: Electronics category has higher average prices
+        if all(col in self.df.columns for col in ['category', 'price']):
+            try:
+                electronics = self.df[self.df['category'] == 'Electronics']['price'].dropna()
+                other_categories = self.df[self.df['category'] != 'Electronics']['price'].dropna()
+
+                if not electronics.empty and not other_categories.empty:
+                    t_stat2, p_value2 = stats.ttest_ind(electronics, other_categories)
+                    print(f"\nH2: Electronics have higher prices than other categories")
+                    print(f"   T-statistic: {t_stat2:.4f}, P-value: {p_value2:.4f}")
+                    print(f"   Result: {'Significant' if p_value2 < 0.05 else 'Not significant'}")
+                    results['h2_pvalue'] = p_value2
+                else:
+                     print("H2: Not enough data in both groups to perform t-test.")
+            except Exception as e:
+                print(f"Could not test H2: {e}")
+
+
+        return results
+
+# Perform EDA
+# Check if df_products exists and is not empty before proceeding
+if 'df_products' in locals() and not df_products.empty:
+    eda_analyzer = EDAAnalyzer(df_products)
+    basic_stats = eda_analyzer.basic_info()
+    meaningful_insights = eda_analyzer.ask_meaningful_questions()
+    patterns = eda_analyzer.identify_patterns_anomalies()
+    hypothesis_results = eda_analyzer.validate_assumptions()
+else:
+    print("\nSkipping EDA analysis because df_products is not loaded or is empty.")
